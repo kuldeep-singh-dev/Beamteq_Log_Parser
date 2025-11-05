@@ -8,6 +8,7 @@ A Python tool to parse Beamteq CNC log files (`.txt`), extract production data, 
 git clone https://github.com/kuldeep-singh-dev/Beamteq_Log_Parser.git
 cd beamteq_log_parser
 pip install -r requirements.txt
+```
 
 ## Quick Start
 
@@ -21,6 +22,7 @@ python main.py data/logs/
 
 # Or parse a single file
 python main.py data/logs/log_ex.txt
+```
 
 ## Output
 
