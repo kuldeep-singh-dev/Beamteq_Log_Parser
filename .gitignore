@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+*.egg-info/
+dist/
+build/
+
+# Database
+db/beamteq.db
+db/*.db
+db/*.sqlite3
+
+# IDE / Editors
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs & Output
+data/output/
+logs/
+*.log
+
+# Environment
+.env
+.env.local
+
+# Build / Export
+*.csv
+*.xlsx
+*.json
