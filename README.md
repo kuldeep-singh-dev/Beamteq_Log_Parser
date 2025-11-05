@@ -44,7 +44,7 @@ python main.py data/logs/log_ex.txt
 ---
 
 ## Project Structure
-
+```bash
 beamteq-log-parser/
 │
 ├── config/
@@ -73,3 +73,4 @@ beamteq-log-parser/
 │
 ├── main.py                       # Entry point
 └── README.md
+```
