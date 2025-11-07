@@ -42,18 +42,22 @@ class BeamteqLogParser:
                 outputs = []
                 component_to_input = {}
                 last_output_full_ts = None
-                current_rohteil_bauteil = None
+                current_bauteil = -1
+                current_abtransport = -1
+
                 continue
 
             if job is None:
                 continue
 
+            if "MPRWriter" in msg:
+                continue
+
             # ---------- Production block ----------
             if msg == "--- production model begin ---" and not job.start_time:
-                job.start_time = ts_full            # keep full for duration calc
+                job.start_time = ts_full
                 continue
-            if msg == "--- production model end ---" and not job.end_time:
-                job.end_time = ts_full
+            if msg == "--- production model end ---":
                 continue
 
             # ---------- Input (Rohteil) ----------
@@ -71,36 +75,33 @@ class BeamteqLogParser:
                         timestamp=time_part
                     )
                     inputs.append(inp)
-                    # Wait for Bauteil 1. X to assign
-                    current_rohteil_bauteil = None
-                continue
-
-            elif "Bauteil 1." in msg:
-                m = re.search(r"Bauteil 1\.\s*(\d+)", msg)
-                if m:
-                    bauteil_num = int(m.group(1))
-                    current_rohteil_bauteil = bauteil_num
-                    # Link Bauteil number to latest input
-                    if len(inputs) > 0:
-                        component_to_input[bauteil_num] = len(inputs) - 1
                 continue
 
             # ---------- Output (Abtransport) ----------
             if "Abtransport Bauteil" in msg:
+                current_abtransport += 1
                 m = re.search(r"Bauteil\s+(\d+).*LfdNr\s+(\d+)", msg)
                 if m:
                     bauteil_num = int(m.group(1))
                     lfd_nr = int(m.group(2))
-                    input_idx = component_to_input.get(bauteil_num)  # Now correct!
+                    input_idx = component_to_input.get(current_abtransport) 
                     out = OutputPiece(
                         job_id=0,
                         input_id=input_idx,
-                        uid=lfd_nr,
+                        uid=bauteil_num,
                         timestamp=time_part,
                         process_time_sec=0.0
                     )
                     outputs.append(out)
                     last_output_full_ts = ts_full
+                continue
+
+            if "Bauteil 1." in msg:
+                current_bauteil += 1
+                m = re.search(r"Bauteil 1\.\s*(\d+)\s+UID\s", msg)
+                if m:
+                    if len(inputs) > 0:
+                        component_to_input[current_bauteil] = len(inputs) - 1
                 continue
 
         # ---------- final job ----------
@@ -139,23 +140,20 @@ class BeamteqLogParser:
         job.total_outputs_length = job.total_inputs_length - job.total_waste
 
         # ----- SAVE ORIGINAL FULL TIMESTAMPS -----
+        upload_full = f"{job.uploaded_date} {job.uploaded_time}"
         start_full = job.start_time
-        end_full = job.end_time or last_output_full_ts or start_full
-        
-        # FORCE use last output if production end is missing or same as start
-        if outputs and last_output_full_ts:
-            last_out_dt = parse_timestamp(last_output_full_ts)
-            if not end_full or parse_timestamp(end_full) <= parse_timestamp(start_full):
-                end_full = last_output_full_ts
+        end_full = last_output_full_ts
         
         # ----- CALCULATE DURATION (using full timestamps) -----
-        if start_full and end_full:
+        if start_full and end_full and upload_full:
             try:
                 
+                upload_dt = parse_timestamp(upload_full)
                 start_dt = parse_timestamp(start_full)   # "22.09.2025 09:28:27"
+
                 end_dt   = parse_timestamp(end_full)     # "22.09.2025 09:41:32"
-                job.duration_minutes = duration_minutes(start_dt, end_dt)
-                job.cutting_duration_minutes = job.duration_minutes
+                job.duration_minutes = duration_minutes(upload_dt, end_dt)
+                job.cutting_duration_minutes = duration_minutes(start_dt, end_dt)
 
                 # NOW convert to time-only for DB
                 job.start_time = start_dt.strftime("%H:%M:%S")
