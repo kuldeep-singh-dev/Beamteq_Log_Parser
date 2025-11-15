@@ -18,10 +18,15 @@ class BeamteqLogParser:
 
         job: Optional[Job] = None
         inputs: List[InputMaterial] = []
+        inputs_planned: List[InputMaterial] = []
         outputs: List[OutputPiece] = []
         component_to_input: Dict[int, int] = {}      # UID → input index
         last_output_full_ts: Optional[str] = None    # full "dd.mm.yyyy HH:MM:SS"
         current_rohteil_bauteil: Optional[int] = None
+
+        file_path = None
+        uploaded_date = None
+        uploaded_time = None          # ← time only
 
         for line, log_file in read_log_files(self.source):
             ts_full, level, msg = self._split_line(line)      # full ts = "dd.mm.yyyy HH:MM:SS"
@@ -29,34 +34,39 @@ class BeamteqLogParser:
 
             # ---------- NEW JOB ----------
             if msg.startswith("File:"):
-                if job is not None:
-                    self._finalize_job(job, inputs, outputs, jobs,
-                                       component_to_input, last_output_full_ts)
                 file_path = msg.split("File:", 1)[1].strip()
-                job = Job(
-                    file_path=file_path,
-                    uploaded_date=date_part,
-                    uploaded_time=time_part          # ← time only
-                )
-                inputs = []
-                outputs = []
-                component_to_input = {}
-                last_output_full_ts = None
-                current_bauteil = -1
-                current_abtransport = -1
-
-                continue
-
-            if job is None:
+                uploaded_date=date_part
+                uploaded_time=time_part          # ← time only
                 continue
 
             if "MPRWriter" in msg:
                 continue
 
             # ---------- Production block ----------
-            if msg == "--- production model begin ---" and not job.start_time:
+            if msg == "--- production model begin ---":
+                if job is not None:
+                    inputs = inputs_planned[:len(outputs)]
+                    self._finalize_job(job, inputs, outputs, jobs,
+                                       component_to_input, last_output_full_ts)
+                    
+                job = Job(
+                    file_path=file_path,
+                    uploaded_date=date_part,
+                    uploaded_time=time_part          # ← time only
+                )
+
+                inputs_planned = []
+                inputs = []
+                outputs = []
+                component_to_input = {}
+                last_output_full_ts = None
+                current_bauteil = -1
+                current_abtransport = -1
+                rohteil_indexs = {}
+
                 job.start_time = ts_full
                 continue
+
             if msg == "--- production model end ---":
                 continue
 
@@ -74,7 +84,7 @@ class BeamteqLogParser:
                         waste_ft=mm_to_feet(float(waste_mm)),
                         timestamp=time_part
                     )
-                    inputs.append(inp)
+                    inputs_planned.append(inp)
                 continue
 
             # ---------- Output (Abtransport) ----------
@@ -100,14 +110,15 @@ class BeamteqLogParser:
                 current_bauteil += 1
                 m = re.search(r"Bauteil 1\.\s*(\d+)\s+UID\s", msg)
                 if m:
-                    if len(inputs) > 0:
-                        component_to_input[current_bauteil] = len(inputs) - 1
+                    if len(inputs_planned) > 0:
+                        component_to_input[current_bauteil] = len(inputs_planned) - 1
                 continue
 
         # ---------- final job ----------
         job.end_time = last_output_full_ts
 
         if job is not None:
+            inputs = inputs_planned[:len(outputs)]
             self._finalize_job(job, inputs, outputs, jobs,
                                component_to_input, last_output_full_ts)
 
