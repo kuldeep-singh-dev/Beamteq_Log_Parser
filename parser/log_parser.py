@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 from .models import Job, InputMaterial, OutputPiece
 from .log_reader import read_log_files
-from utils.time_utils import parse_timestamp, duration_minutes
+from utils.time_utils import parse_timestamp, duration_minutes, duration_seconds
 from utils.converters import mm_to_feet, mm_to_inches
 
 
@@ -27,8 +27,11 @@ class BeamteqLogParser:
         file_path = None
         uploaded_date = None
         uploaded_time = None          # ← time only
+        time_part=0
+        ts_full=0
 
         for line, log_file in read_log_files(self.source):
+            ts_prev_full=ts_full
             ts_full, level, msg = self._split_line(line)      # full ts = "dd.mm.yyyy HH:MM:SS"
             date_part, time_part = ts_full.split(maxsplit=1)   # split once → date, time
 
@@ -94,13 +97,18 @@ class BeamteqLogParser:
                 if m:
                     bauteil_num = int(m.group(1))
                     lfd_nr = int(m.group(2))
-                    input_idx = component_to_input.get(current_abtransport) 
+                    input_idx = component_to_input.get(current_abtransport)
+                    if outputs:
+                        process_time_part=duration_seconds(parse_timestamp(ts_prev_full),parse_timestamp(ts_full))
+                    else:
+                        process_time_part=0.0
+
                     out = OutputPiece(
                         job_id=0,
                         input_id=input_idx,
                         uid=bauteil_num,
                         timestamp=time_part,
-                        process_time_sec=0.0
+                        process_time_sec=process_time_part
                     )
                     outputs.append(out)
                     last_output_full_ts = ts_full
